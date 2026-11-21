@@ -14,7 +14,6 @@
         <!-- Kopfbereich mit großem Kassastand -->
         <header class="header">
             <div class="header-top">
-            <!-- Monatliche Steuerung -->
                 <div>
                     <h1>Kassabuch</h1>
                     <p class="subtitle">Bargeld-Monatsabrechnung</p>
@@ -26,11 +25,18 @@
             </div>
 
             <div class="balance-card">
+                <div class="start-balance-wrapper">
+                    <label for="startBalanceInput">Kassastand zu Monatsbeginn (€):</label>
+                    <input type="number" id="startBalanceInput" step="1" placeholder="0">
+                </div>
+
                 <span class="balance-label">Aktueller Kassastand</span>
-                <div id="totalBalance" class="balance-amount">0,00 €</div>
+                <div id="totalBalance" class="balance-amount">0 €</div>
+                
                 <div class="balance-summary">
-                    <span class="income-text">Einnahmen: <strong id="totalIncome">0,00 €</strong></span>
-                    <span class="expense-text">Ausgaben: <strong id="totalExpense">0,00 €</strong></span>
+                    <span class="start-text">Anfang: <strong id="displayStartBalance">0 €</strong></span>
+                    <span class="income-text">Einnahmen: <strong id="totalIncome">0 €</strong></span>
+                    <span class="expense-text">Ausgaben: <strong id="totalExpense">0 €</strong></span>
                 </div>
             </div>
         </header>
@@ -64,9 +70,15 @@
                     </div>
 
                     <div class="input-group">
-                        <input type="text" id="descriptionInput" placeholder="Bezeichnung (z. B. Einkauf, Umsatz)" required>
-                        <input type="number" id="amountInput" placeholder="Betrag (€)" step="0.01" min="0.01" required>
+                        <input type="text" id="kzInput" placeholder="KZ" required>
+                        <input type="number" id="amountInput" placeholder="Betrag (€)" step="1" min="1" required>
                     </div>
+
+                    <div class="extra-text-group">
+                        <input type="text" id="text1Input" placeholder="Text 1">
+                        <input type="text" id="text2Input" placeholder="Text 2">
+                    </div>
+
                     <button type="submit" class="btn btn-add">Eintragen</button>
                 </form>
 

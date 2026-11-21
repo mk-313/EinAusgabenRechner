@@ -1,11 +1,15 @@
 document.addEventListener("DOMContentLoaded", () => {
     // DOM-Elemente
     const monthPicker = document.getElementById("monthPicker");
+    const startBalanceInput = document.getElementById("startBalanceInput");
+    const displayStartBalanceEl = document.getElementById("displayStartBalance");
     const daysGrid = document.getElementById("daysGrid");
     const selectedDayTitle = document.getElementById("selectedDayTitle");
     const transactionForm = document.getElementById("transactionForm");
-    const descriptionInput = document.getElementById("descriptionInput");
+    const kzInput = document.getElementById("kzInput");
     const amountInput = document.getElementById("amountInput");
+    const text1Input = document.getElementById("text1Input");
+    const text2Input = document.getElementById("text2Input");
     const transactionList = document.getElementById("transactionList");
     const totalBalanceEl = document.getElementById("totalBalance");
     const totalIncomeEl = document.getElementById("totalIncome");
@@ -20,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let selectedDay = today.getDate();
 
-    // Datenstruktur aus localStorage laden: { "2026-11": { "1": [ {id, type, desc, amount} ], ... } }
+    // Datenstruktur aus localStorage laden
     let allData = JSON.parse(localStorage.getItem("kassabuch_data")) || {};
 
     function saveData() {
@@ -30,7 +34,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function getMonthData() {
         const ym = monthPicker.value;
         if (!allData[ym]) {
-            allData[ym] = {};
+            allData[ym] = { startBalance: 0, days: {} };
+        } else if (!allData[ym].days) {
+            const oldDays = { ...allData[ym] };
+            allData[ym] = { startBalance: 0, days: oldDays };
         }
         return allData[ym];
     }
@@ -40,15 +47,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return new Date(year, month, 0).getDate();
     }
 
+    // Formatierung ohne Nachkommastellen (nur ganze Euro)
     function formatCurrency(value) {
-        return value.toLocaleString("de-AT", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+        return Math.round(value).toLocaleString("de-AT", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }) + " €";
     }
 
     // UI komplett neu zeichnen
     function renderAll() {
+        const monthData = getMonthData();
+        const roundedStart = Math.round(Number(monthData.startBalance) || 0);
+        startBalanceInput.value = roundedStart !== 0 ? roundedStart : "";
+        
         renderDaysGrid();
         renderDayTransactions();
         updateTotals();
@@ -74,7 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 btn.classList.add("active");
             }
 
-            if (monthData[day] && monthData[day].length > 0) {
+            if (monthData.days[day] && monthData.days[day].length > 0) {
                 btn.classList.add("has-entries");
             }
 
@@ -94,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderDayTransactions() {
         transactionList.innerHTML = "";
         const monthData = getMonthData();
-        const entries = monthData[selectedDay] || [];
+        const entries = monthData.days[selectedDay] || [];
 
         if (entries.length === 0) {
             transactionList.innerHTML = `<li class="empty-state">Keine Einträge für diesen Tag vorhanden.</li>`;
@@ -105,9 +117,24 @@ document.addEventListener("DOMContentLoaded", () => {
             const li = document.createElement("li");
             li.className = `transaction-item ${entry.type}`;
 
+            const kzValue = entry.kz || entry.desc || "";
+            const t1 = entry.text1 || "";
+            const t2 = entry.text2 || "";
+
+            let subtextsHtml = "";
+            if (t1 || t2) {
+                subtextsHtml += `<div class="item-subtexts">`;
+                if (t1) subtextsHtml += `<span class="subtext-badge"><strong>Text 1:</strong> ${escapeHtml(t1)}</span>`;
+                if (t2) subtextsHtml += `<span class="subtext-badge"><strong>Text 2:</strong> ${escapeHtml(t2)}</span>`;
+                subtextsHtml += `</div>`;
+            }
+
             const sign = entry.type === "income" ? "+" : "-";
             li.innerHTML = `
-                <span class="item-desc">${escapeHtml(entry.desc)}</span>
+                <div class="item-left">
+                    <span class="item-kz">KZ: ${escapeHtml(kzValue)}</span>
+                    ${subtextsHtml}
+                </div>
                 <div class="item-right">
                     <span class="item-amount ${entry.type}">${sign} ${formatCurrency(entry.amount)}</span>
                     <button type="button" class="delete-btn" title="Eintrag löschen">&times;</button>
@@ -125,21 +152,24 @@ document.addEventListener("DOMContentLoaded", () => {
     // Gesamtsummen & Kassastand oben aktualisieren
     function updateTotals() {
         const monthData = getMonthData();
+        const startBalance = Math.round(Number(monthData.startBalance) || 0);
         let income = 0;
         let expense = 0;
 
-        Object.values(monthData).forEach((dayEntries) => {
+        Object.values(monthData.days).forEach((dayEntries) => {
             dayEntries.forEach((entry) => {
+                const roundedAmount = Math.round(Number(entry.amount) || 0);
                 if (entry.type === "income") {
-                    income += entry.amount;
+                    income += roundedAmount;
                 } else {
-                    expense += entry.amount;
+                    expense += roundedAmount;
                 }
             });
         });
 
-        const balance = income - expense;
+        const balance = startBalance + income - expense;
 
+        displayStartBalanceEl.textContent = formatCurrency(startBalance);
         totalIncomeEl.textContent = formatCurrency(income);
         totalExpenseEl.textContent = formatCurrency(expense);
         totalBalanceEl.textContent = formatCurrency(balance);
@@ -151,41 +181,56 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Neuen Eintrag hinzufügen
+    // Änderung des Anfangsbestands live speichern & berechnen (nur ganze Euro)
+    startBalanceInput.addEventListener("input", () => {
+        const monthData = getMonthData();
+        const val = parseInt(startBalanceInput.value, 10);
+        monthData.startBalance = isNaN(val) ? 0 : val;
+        saveData();
+        updateTotals();
+    });
+
+    // Neuen Eintrag hinzufügen (nur ganze Euro)
     transactionForm.addEventListener("submit", (e) => {
         e.preventDefault();
 
         const type = document.querySelector('input[name="type"]:checked').value;
-        const desc = descriptionInput.value.trim();
-        const amount = parseFloat(amountInput.value);
+        const kz = kzInput.value.trim();
+        const amount = Math.round(parseFloat(amountInput.value));
+        const text1 = text1Input.value.trim();
+        const text2 = text2Input.value.trim();
 
-        if (!desc || isNaN(amount) || amount <= 0) return;
+        if (!kz || isNaN(amount) || amount <= 0) return;
 
         const monthData = getMonthData();
-        if (!monthData[selectedDay]) {
-            monthData[selectedDay] = [];
+        if (!monthData.days[selectedDay]) {
+            monthData.days[selectedDay] = [];
         }
 
-        monthData[selectedDay].push({
+        monthData.days[selectedDay].push({
             id: Date.now(),
             type,
-            desc,
+            kz,
+            text1,
+            text2,
             amount
         });
 
         saveData();
-        descriptionInput.value = "";
+        kzInput.value = "";
         amountInput.value = "";
-        descriptionInput.focus();
+        text1Input.value = "";
+        text2Input.value = "";
+        kzInput.focus();
         renderAll();
     });
 
     // Eintrag löschen
     function deleteTransaction(id) {
         const monthData = getMonthData();
-        if (!monthData[selectedDay]) return;
+        if (!monthData.days[selectedDay]) return;
 
-        monthData[selectedDay] = monthData[selectedDay].filter((item) => item.id !== id);
+        monthData.days[selectedDay] = monthData.days[selectedDay].filter((item) => item.id !== id);
         saveData();
         renderAll();
     }
@@ -199,8 +244,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Aktuellen Monat zurücksetzen
     resetMonthBtn.addEventListener("click", () => {
         const ym = monthPicker.value;
-        if (confirm(`Möchtest du wirklich alle Einträge für ${ym} unwiderruflich löschen?`)) {
-            allData[ym] = {};
+        if (confirm(`Möchtest du wirklich alle Einträge und den Anfangsbestand für ${ym} unwiderruflich löschen?`)) {
+            allData[ym] = { startBalance: 0, days: {} };
             saveData();
             renderAll();
         }
@@ -220,43 +265,65 @@ document.addEventListener("DOMContentLoaded", () => {
         const monthName = monthNames[parseInt(month, 10) - 1];
         const monthData = getMonthData();
 
-        // Tabellenzeilen chronologisch von Tag 1 bis 31 aufbauen
-        const rows = [];
+        const startBalance = Math.round(Number(monthData.startBalance) || 0);
         let totalIncome = 0;
         let totalExpense = 0;
-        let runningBalance = 0;
+        let runningBalance = startBalance;
 
+        // Erste Zeile im PDF: Kassastand zu Monatsbeginn
+        const rows = [
+            [
+                `01.${month}.${year}`,
+                "Anfangsbestand",
+                "Übertrag Monatsbeginn",
+                "",
+                "",
+                "",
+                formatCurrency(startBalance)
+            ]
+        ];
+
+        // Tabellenzeilen chronologisch von Tag 1 bis 31 aufbauen
         const daysCount = getDaysInMonth(ym);
         for (let day = 1; day <= daysCount; day++) {
-            const entries = monthData[day] || [];
+            const entries = monthData.days[day] || [];
             entries.forEach((entry) => {
                 const dateStr = `${String(day).padStart(2, "0")}.${month}.${year}`;
+                const kzValue = entry.kz || entry.desc || "";
+                const t1 = entry.text1 || "";
+                const t2 = entry.text2 || "";
+                const roundedAmount = Math.round(Number(entry.amount) || 0);
+
                 if (entry.type === "income") {
-                    totalIncome += entry.amount;
-                    runningBalance += entry.amount;
+                    totalIncome += roundedAmount;
+                    runningBalance += roundedAmount;
                     rows.push([
                         dateStr,
-                        entry.desc,
-                        formatCurrency(entry.amount),
+                        kzValue,
+                        t1,
+                        t2,
+                        formatCurrency(roundedAmount),
                         "",
                         formatCurrency(runningBalance)
                     ]);
                 } else {
-                    totalExpense += entry.amount;
-                    runningBalance -= entry.amount;
+                    totalExpense += roundedAmount;
+                    runningBalance -= roundedAmount;
                     rows.push([
                         dateStr,
-                        entry.desc,
+                        kzValue,
+                        t1,
+                        t2,
                         "",
-                        formatCurrency(entry.amount),
+                        formatCurrency(roundedAmount),
                         formatCurrency(runningBalance)
                     ]);
                 }
             });
         }
 
-        if (rows.length === 0) {
-            alert("Für diesen Monat sind noch keine Buchungen vorhanden.");
+        if (rows.length === 1 && startBalance === 0) {
+            alert("Für diesen Monat sind noch keine Daten vorhanden.");
             return;
         }
 
@@ -273,16 +340,16 @@ document.addEventListener("DOMContentLoaded", () => {
         // Tabelle rendern
         doc.autoTable({
             startY: 36,
-            head: [["Datum", "Bezeichnung", "Einnahme", "Ausgabe", "Kassastand"]],
+            head: [["Datum", "KZ", "Text 1", "Text 2", "Einnahme", "Ausgabe", "Kassastand"]],
             body: rows,
             theme: "striped",
             headStyles: { fillColor: [30, 41, 59] },
             columnStyles: {
-                2: { halign: "right", textColor: [16, 185, 129] },
-                3: { halign: "right", textColor: [239, 68, 68] },
-                4: { halign: "right", fontStyle: "bold" }
+                4: { halign: "right", textColor: [16, 185, 129] },
+                5: { halign: "right", textColor: [239, 68, 68] },
+                6: { halign: "right", fontStyle: "bold" }
             },
-            styles: { fontSize: 9.5 }
+            styles: { fontSize: 8.5 }
         });
 
         // Zusammenfassung unter der Tabelle
@@ -290,12 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setTextColor(0);
         doc.setFontSize(11);
         doc.setFont("helvetica", "normal");
-        doc.text(`Summe Einnahmen: ${formatCurrency(totalIncome)}`, 14, finalY);
-        doc.text(`Summe Ausgaben: ${formatCurrency(totalExpense)}`, 14, finalY + 7);
+        doc.text(`Anfangsbestand: ${formatCurrency(startBalance)}`, 14, finalY);
+        doc.text(`Summe Einnahmen: ${formatCurrency(totalIncome)}`, 14, finalY + 7);
+        doc.text(`Summe Ausgaben: ${formatCurrency(totalExpense)}`, 14, finalY + 14);
 
         doc.setFontSize(13);
         doc.setFont("helvetica", "bold");
-        doc.text(`End-Kassastand: ${formatCurrency(runningBalance)}`, 14, finalY + 16);
+        doc.text(`End-Kassastand: ${formatCurrency(runningBalance)}`, 14, finalY + 23);
 
         // Datei speichern
         doc.save(`Kassabuch_${year}_${month}.pdf`);
@@ -311,5 +379,3 @@ document.addEventListener("DOMContentLoaded", () => {
     // Start-Render
     renderAll();
 });
-
-// Git Kommentar
