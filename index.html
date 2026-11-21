@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bargeld Monatsabrechnung</title>
+    <link rel="stylesheet" href="./CSS/style.css">
+    <!-- jsPDF & AutoTable für den PDF-Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Kopfbereich mit großem Kassastand -->
+        <header class="header">
+            <div class="header-top">
+            <!-- Monatliche Steuerung -->
+                <div>
+                    <h1>Kassabuch</h1>
+                    <p class="subtitle">Bargeld-Monatsabrechnung</p>
+                </div>
+                <div class="month-controls">
+                    <input type="month" id="monthPicker" aria-label="Monat wählen">
+                    <button id="exportPdfBtn" class="btn btn-primary">📄 Monatsabschluss (PDF)</button>
+                </div>
+            </div>
+
+            <div class="balance-card">
+                <span class="balance-label">Aktueller Kassastand</span>
+                <div id="totalBalance" class="balance-amount">0,00 €</div>
+                <div class="balance-summary">
+                    <span class="income-text">Einnahmen: <strong id="totalIncome">0,00 €</strong></span>
+                    <span class="expense-text">Ausgaben: <strong id="totalExpense">0,00 €</strong></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-grid">
+            <!-- Linke Spalte: Kalendertage 1–31 -->
+            <section class="card calendar-section">
+                <div class="section-header">
+                    <h2>Tag auswählen</h2>
+                    <button id="resetMonthBtn" class="btn-text-danger" title="Monatsdaten löschen">Monat zurücksetzen</button>
+                </div>
+                <div id="daysGrid" class="days-grid">
+                    <!-- Tage werden per JS generiert -->
+                </div>
+            </section>
+
+            <!-- Rechte Spalte: Buchungen für den ausgewählten Tag -->
+            <section class="card day-details-section">
+                <h2 id="selectedDayTitle">Buchungen für Tag 1</h2>
+                
+                <form id="transactionForm" class="transaction-form">
+                    <div class="type-toggle">
+                        <label class="radio-label income-radio">
+                            <input type="radio" name="type" value="income" checked>
+                            <span>+ Einnahme</span>
+                        </label>
+                        <label class="radio-label expense-radio">
+                            <input type="radio" name="type" value="expense">
+                            <span>- Ausgabe</span>
+                        </label>
+                    </div>
+
+                    <div class="input-group">
+                        <input type="text" id="descriptionInput" placeholder="Bezeichnung (z. B. Einkauf, Umsatz)" required>
+                        <input type="number" id="amountInput" placeholder="Betrag (€)" step="0.01" min="0.01" required>
+                    </div>
+                    <button type="submit" class="btn btn-add">Eintragen</button>
+                </form>
+
+                <div class="transactions-list-wrapper">
+                    <h3>Einträge an diesem Tag</h3>
+                    <ul id="transactionList" class="transaction-list">
+                        <!-- Buchungen werden per JS eingefügt -->
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
