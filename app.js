@@ -10,6 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const amountInput = document.getElementById("amountInput");
     const text1Input = document.getElementById("text1Input");
     const text2Input = document.getElementById("text2Input");
+    const submitBtn = document.getElementById("submitBtn");
+    const cancelEditBtn = document.getElementById("cancelEditBtn");
     const transactionList = document.getElementById("transactionList");
     const totalBalanceEl = document.getElementById("totalBalance");
     const totalIncomeEl = document.getElementById("totalIncome");
@@ -23,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     monthPicker.value = currentYearMonth;
 
     let selectedDay = today.getDate();
+    let editingTransactionId = null;
 
     // Datenstruktur aus localStorage laden
     let allData = JSON.parse(localStorage.getItem("kassabuch_data")) || {};
@@ -53,6 +56,16 @@ document.addEventListener("DOMContentLoaded", () => {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         }) + " €";
+    }
+
+    // Bearbeitungsmodus beenden und Formular zurücksetzen
+    function exitEditMode() {
+        editingTransactionId = null;
+        transactionForm.reset();
+        document.querySelector('input[name="type"][value="income"]').checked = true;
+        submitBtn.textContent = "Eintragen";
+        submitBtn.classList.remove("editing");
+        cancelEditBtn.hidden = true;
     }
 
     // UI komplett neu zeichnen
@@ -91,6 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             btn.addEventListener("click", () => {
+                exitEditMode();
                 selectedDay = day;
                 renderAll();
             });
@@ -116,6 +130,9 @@ document.addEventListener("DOMContentLoaded", () => {
         entries.forEach((entry) => {
             const li = document.createElement("li");
             li.className = `transaction-item ${entry.type}`;
+            if (entry.id === editingTransactionId) {
+                li.classList.add("is-editing");
+            }
 
             const kzValue = entry.kz || entry.desc || "";
             const t1 = entry.text1 || "";
@@ -137,9 +154,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <div class="item-right">
                     <span class="item-amount ${entry.type}">${sign} ${formatCurrency(entry.amount)}</span>
-                    <button type="button" class="delete-btn" title="Eintrag löschen">&times;</button>
+                    <button type="button" class="action-btn edit-btn" title="Eintrag bearbeiten">✎</button>
+                    <button type="button" class="action-btn delete-btn" title="Eintrag löschen">&times;</button>
                 </div>
             `;
+
+            li.querySelector(".edit-btn").addEventListener("click", () => {
+                startEditTransaction(entry);
+            });
 
             li.querySelector(".delete-btn").addEventListener("click", () => {
                 deleteTransaction(entry.id);
@@ -148,6 +170,32 @@ document.addEventListener("DOMContentLoaded", () => {
             transactionList.appendChild(li);
         });
     }
+
+    // Eintrag zum Bearbeiten ins Formular laden
+    function startEditTransaction(entry) {
+        editingTransactionId = entry.id;
+
+        const radio = document.querySelector(`input[name="type"][value="${entry.type}"]`);
+        if (radio) radio.checked = true;
+
+        kzInput.value = entry.kz || entry.desc || "";
+        amountInput.value = Math.round(Number(entry.amount) || 0);
+        text1Input.value = entry.text1 || "";
+        text2Input.value = entry.text2 || "";
+
+        submitBtn.textContent = "Änderungen speichern";
+        submitBtn.classList.add("editing");
+        cancelEditBtn.hidden = false;
+
+        kzInput.focus();
+        renderDayTransactions();
+    }
+
+    // Bearbeitung abbrechen
+    cancelEditBtn.addEventListener("click", () => {
+        exitEditMode();
+        renderDayTransactions();
+    });
 
     // Gesamtsummen & Kassastand oben aktualisieren
     function updateTotals() {
@@ -190,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTotals();
     });
 
-    // Neuen Eintrag hinzufügen (nur ganze Euro)
+    // Neuen Eintrag hinzufügen ODER bestehenden Eintrag aktualisieren
     transactionForm.addEventListener("submit", (e) => {
         e.preventDefault();
 
@@ -207,20 +255,35 @@ document.addEventListener("DOMContentLoaded", () => {
             monthData.days[selectedDay] = [];
         }
 
-        monthData.days[selectedDay].push({
-            id: Date.now(),
-            type,
-            kz,
-            text1,
-            text2,
-            amount
-        });
+        if (editingTransactionId !== null) {
+            const index = monthData.days[selectedDay].findIndex((item) => item.id === editingTransactionId);
+            if (index !== -1) {
+                monthData.days[selectedDay][index] = {
+                    ...monthData.days[selectedDay][index],
+                    type,
+                    kz,
+                    text1,
+                    text2,
+                    amount
+                };
+            }
+            exitEditMode();
+        } else {
+            monthData.days[selectedDay].push({
+                id: Date.now(),
+                type,
+                kz,
+                text1,
+                text2,
+                amount
+            });
+            kzInput.value = "";
+            amountInput.value = "";
+            text1Input.value = "";
+            text2Input.value = "";
+        }
 
         saveData();
-        kzInput.value = "";
-        amountInput.value = "";
-        text1Input.value = "";
-        text2Input.value = "";
         kzInput.focus();
         renderAll();
     });
@@ -230,6 +293,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const monthData = getMonthData();
         if (!monthData.days[selectedDay]) return;
 
+        if (editingTransactionId === id) {
+            exitEditMode();
+        }
+
         monthData.days[selectedDay] = monthData.days[selectedDay].filter((item) => item.id !== id);
         saveData();
         renderAll();
@@ -237,6 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Monatswechsel
     monthPicker.addEventListener("change", () => {
+        exitEditMode();
         selectedDay = 1;
         renderAll();
     });
@@ -245,6 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resetMonthBtn.addEventListener("click", () => {
         const ym = monthPicker.value;
         if (confirm(`Möchtest du wirklich alle Einträge und den Anfangsbestand für ${ym} unwiderruflich löschen?`)) {
+            exitEditMode();
             allData[ym] = { startBalance: 0, days: {} };
             saveData();
             renderAll();
@@ -270,7 +339,6 @@ document.addEventListener("DOMContentLoaded", () => {
         let totalExpense = 0;
         let runningBalance = startBalance;
 
-        // Erste Zeile im PDF: Kassastand zu Monatsbeginn
         const rows = [
             [
                 `01.${month}.${year}`,
@@ -283,7 +351,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ]
         ];
 
-        // Tabellenzeilen chronologisch von Tag 1 bis 31 aufbauen
         const daysCount = getDaysInMonth(ym);
         for (let day = 1; day <= daysCount; day++) {
             const entries = monthData.days[day] || [];
@@ -327,7 +394,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // PDF Header
         doc.setFontSize(18);
         doc.setFont("helvetica", "bold");
         doc.text(`Bargeld-Monatsabschluss: ${monthName} ${year}`, 14, 22);
@@ -337,7 +403,6 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setTextColor(100);
         doc.text(`Erstellt am: ${new Date().toLocaleDateString("de-AT")}`, 14, 29);
 
-        // Tabelle rendern
         doc.autoTable({
             startY: 36,
             head: [["Datum", "KZ", "Text 1", "Text 2", "Einnahme", "Ausgabe", "Kassastand"]],
@@ -352,7 +417,6 @@ document.addEventListener("DOMContentLoaded", () => {
             styles: { fontSize: 8.5 }
         });
 
-        // Zusammenfassung unter der Tabelle
         const finalY = doc.lastAutoTable.finalY + 12;
         doc.setTextColor(0);
         doc.setFontSize(11);
@@ -365,17 +429,14 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setFont("helvetica", "bold");
         doc.text(`End-Kassastand: ${formatCurrency(runningBalance)}`, 14, finalY + 23);
 
-        // Datei speichern
         doc.save(`Kassabuch_${year}_${month}.pdf`);
     });
 
-    // XSS-Schutz für Texteingaben
     function escapeHtml(text) {
         const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
 
-    // Start-Render
     renderAll();
 });

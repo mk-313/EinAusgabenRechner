@@ -79,7 +79,10 @@
                         <input type="text" id="text2Input" placeholder="Text 2">
                     </div>
 
-                    <button type="submit" class="btn btn-add">Eintragen</button>
+                    <div class="form-actions">
+                        <button type="submit" id="submitBtn" class="btn btn-add">Eintragen</button>
+                        <button type="button" id="cancelEditBtn" class="btn btn-cancel" hidden>Abbrechen</button>
+                    </div>
                 </form>
 
                 <div class="transactions-list-wrapper">
@@ -92,6 +95,6 @@
         </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="./app.js"></script>
 </body>
 </html>
